@@ -74,8 +74,6 @@ const ALL_CARDS: Card[] = [...BASICS, ...DAYS, ...MONTHS, ...COLORS];
 const DECKS = ["All", "Basics", "Days", "Months", "Colors"] as const;
 
 // ---------- Utilities ----------
-const STORAGE_KEY = "spanish_flashcards_progress_merged_v1";
-
 function todayISO() {
   const d = new Date();
   return d.toISOString().slice(0, 10);
@@ -83,8 +81,8 @@ function todayISO() {
 
 function loadProgress(): DeckProgress {
   // Use in-memory storage instead of localStorage for artifacts
-  if (typeof window !== 'undefined' && window.flashcardProgress) {
-    return window.flashcardProgress;
+  if (typeof window !== 'undefined' && (window as any).flashcardProgress) {
+    return (window as any).flashcardProgress;
   }
   // initialize all cards in box 1
   const boxes: Record<string, number> = {};
@@ -95,7 +93,7 @@ function loadProgress(): DeckProgress {
 function saveProgress(p: DeckProgress) {
   // Use in-memory storage instead of localStorage for artifacts
   if (typeof window !== 'undefined') {
-    window.flashcardProgress = p;
+    (window as any).flashcardProgress = p;
   }
 }
 
@@ -219,72 +217,47 @@ export default function SpanishFlashcards() {
   function exportProgress() {
     if (!progress) return;
 
-    // Helper function to calculate percentage
-    const getPercentage = (correct, total) => {
-      return total > 0 ? Math.round((correct / total) * 100) : 0;
-    };
-
-    // Helper function to format date
-    const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString();
-    };
-
-    // Calculate overall stats
-    const totalWords = Object.keys(progress).length;
-    const masteredWords = Object.values(progress).filter(word => word.mastered).length;
-    const overallAccuracy = Object.values(progress).reduce((acc, word) => {
-      const total = word.correct + word.incorrect;
-      return acc + (total > 0 ? word.correct / total : 0);
-    }, 0) / totalWords;
+    // Calculate stats based on the actual data structure
+    const totalWords = Object.keys(progress.boxes).length;
+    const masteredWords = Object.values(progress.boxes).filter(box => box >= 5).length;
+    const totalReviews = progress.reviews.length;
+    const correctReviews = progress.reviews.filter(r => r.result === "good" || r.result === "easy").length;
+    const overallAccuracy = totalReviews > 0 ? Math.round((correctReviews / totalReviews) * 100) : 0;
 
     // Create formatted report
-    const report = `SPANISH LEARNING PROGRESS REPORT s
+    const report = `SPANISH LEARNING PROGRESS REPORT
 Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
 
 === OVERALL STATISTICS ===
-Total Words Learned: ${totalWords}
-Words Mastered: ${masteredWords}
-Mastery Rate: ${getPercentage(masteredWords, totalWords)}%
-Overall Accuracy: ${Math.round(overallAccuracy * 100)}%
+Total Words: ${totalWords}
+Words Mastered (Box 5): ${masteredWords}
+Mastery Rate: ${totalWords > 0 ? Math.round((masteredWords / totalWords) * 100) : 0}%
+Overall Accuracy: ${overallAccuracy}%
+Current Streak: ${progress.streak} days
+Total Reviews: ${totalReviews}
 
-=== DETAILED WORD PROGRESS ===
-${Object.entries(progress).map(([word, stats]) => {
-      const totalAttempts = stats.correct + stats.incorrect;
-      const accuracy = getPercentage(stats.correct, totalAttempts);
-      const status = stats.mastered ? "✓ MASTERED" : "In Progress";
-      const lastSeen = stats.lastSeen ? formatDate(stats.lastSeen) : "Never";
-
-      return `Word: ${word}
-  Status: ${status}
-  Correct Answers: ${stats.correct}
-  Incorrect Answers: ${stats.incorrect}
-  Total Attempts: ${totalAttempts}
-  Accuracy: ${accuracy}%
-  Last Practiced: ${lastSeen}
-  Streak: ${stats.streak || 0}
-  ${stats.definition ? `Definition: ${stats.definition}` : ''}
-  ---`;
+=== LEITNER BOX DISTRIBUTION ===
+${[1, 2, 3, 4, 5].map(box => {
+      const count = Object.values(progress.boxes).filter(b => b === box).length;
+      return `Box ${box}: ${count} cards`;
     }).join('\n')}
 
-=== PERFORMANCE INSIGHTS ===
-${masteredWords > 0 ? `🎉 Congratulations! You've mastered ${masteredWords} words!` : '💪 Keep practicing to master your first word!'}
-${overallAccuracy > 0.8 ? '🌟 Excellent accuracy! You\'re doing great!' : overallAccuracy > 0.6 ? '👍 Good progress! Keep it up!' : '📚 Focus on reviewing difficult words to improve accuracy.'}
+=== RECENT ACTIVITY ===
+${progress.reviews.slice(-10).reverse().map(review => {
+      const card = ALL_CARDS.find(c => c.id === review.cardId);
+      const date = new Date(review.ts).toLocaleDateString();
+      const time = new Date(review.ts).toLocaleTimeString();
+      return `${date} ${time}: ${card?.front || 'Unknown'} - ${review.result}`;
+    }).join('\n') || 'No recent activity'}
 
-=== WORDS NEEDING ATTENTION ===
-${Object.entries(progress)
-        .filter(([_, stats]) => !stats.mastered && (stats.correct + stats.incorrect) > 0)
-        .sort(([_, a], [__, b]) => {
-          const accuracyA = a.correct / (a.correct + a.incorrect);
-          const accuracyB = b.correct / (b.correct + b.incorrect);
-          return accuracyA - accuracyB;
-        })
-        .slice(0, 10)
-        .map(([word, stats]) => {
-          const accuracy = getPercentage(stats.correct, stats.correct + stats.incorrect);
-          return `• ${word} (${accuracy}% accuracy)`;
-        }).join('\n') || '✨ All practiced words are doing well!'}
+=== CARDS BY DECK ===
+${DECKS.slice(1).map(deck => {
+      const deckCards = ALL_CARDS.filter(c => c.deck === deck);
+      const deckMastered = deckCards.filter(c => (progress.boxes[c.id] ?? 1) >= 5).length;
+      return `${deck}: ${deckMastered}/${deckCards.length} mastered`;
+    }).join('\n')}
 
-Report generated by Spanish Learning App`;
+Report generated by Spanish Learning App - Built by David Iphy`;
 
     // Create and download the file
     const blob = new Blob([report], { type: "text/plain" });
@@ -347,21 +320,25 @@ Report generated by Spanish Learning App`;
             label="Streak"
             value={`${progress?.streak ?? 0} day${(progress?.streak ?? 0) === 1 ? "" : "s"}`}
             hint={progress?.lastStudyDayISO ? `Last: ${progress.lastStudyDayISO}` : "Start today"}
+            theme={theme}
           />
           <StatCard
             label="Mastered"
             value={`${mastered}/${total}`}
             hint="Box 5 cards"
+            theme={theme}
           />
           <StatCard
             label="Due now"
             value={`${due}`}
             hint="Cards scheduled today"
+            theme={theme}
           />
           <StatCard
             label="Session"
             value={`${completedInSession}`}
             hint="Cards reviewed today"
+            theme={theme}
           />
         </section>
 
@@ -556,12 +533,24 @@ function EmptyState({ theme }: { theme: "dark" | "light" }) {
   );
 }
 
-function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function StatCard({ label, value, hint, theme }: { label: string; value: string; hint?: string; theme: "dark" | "light" }) {
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <p className="text-xs uppercase tracking-wide text-neutral-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-      {hint && <p className="mt-1 text-xs text-neutral-500">{hint}</p>}
+    <div className={classNames(
+      "rounded-2xl border p-4",
+      theme === "dark" ? "border-neutral-800 bg-neutral-900" : "border-neutral-300 bg-neutral-100"
+    )}>
+      <p className={classNames(
+        "text-xs uppercase tracking-wide",
+        theme === "dark" ? "text-neutral-400" : "text-neutral-600"
+      )}>{label}</p>
+      <p className={classNames(
+        "mt-2 text-2xl font-semibold",
+        theme === "dark" ? "text-white" : "text-black"
+      )}>{value}</p>
+      {hint && <p className={classNames(
+        "mt-1 text-xs",
+        theme === "dark" ? "text-neutral-500" : "text-neutral-500"
+      )}>{hint}</p>}
     </div>
   );
 }
@@ -588,11 +577,4 @@ function RefTable({ title, rows, theme }: { title: string; rows: Card[]; theme: 
       </div>
     </div>
   );
-}
-
-// Extend window type for in-memory storage
-declare global {
-  interface Window {
-    flashcardProgress?: DeckProgress;
-  }
 }
