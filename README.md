@@ -14,11 +14,10 @@ A tiny Next.js + TailwindCSS app to practice Spanish vocab with:
 - Export & reset progress
 
 ## Live Demo
-[Check it out here](https://your-vercel-link.vercel.app)
+[Check it out here](https://spanish-flashcard-app.vercel.app/)
 
 ## Screenshots
-![Card Flip](./screenshots/card-flip.png)
-![Deck Selection](./screenshots/deck-selection.png)
+![UI](/Screenshots/Screenshot.png)
 
 ## Installation
 ```bash
