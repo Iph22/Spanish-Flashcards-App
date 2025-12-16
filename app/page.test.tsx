@@ -63,7 +63,8 @@ describe('SpanishFlashcards', () => {
     expect(screen.getByTestId('mastery-badge-4')).toBeInTheDocument();
 
     // 3. Click the reset button for the "Colors" deck.
-    fireEvent.click(screen.getByText('Reset'));
+    // Updated to match new UI: Reset button has "Reset Deck" title
+    fireEvent.click(screen.getByTitle('Reset Deck'));
 
     // 4. After reset, all cards in the "Colors" deck are due and in box 1.
     // The current card will be one of them. We verify its box number.
@@ -72,7 +73,9 @@ describe('SpanishFlashcards', () => {
     });
 
     // 5. Verify the streak is NOT reset when a specific deck is reset.
-    expect(screen.getByText('5 days')).toBeInTheDocument();
+    // Updated: Value '5' and Label 'Days' are separate now
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getAllByText('Days')[0]).toBeInTheDocument();
 
     // 6. Now, switch to the "Basics" deck to verify its progress is untouched.
     fireEvent.click(screen.getByText('Basics'));
@@ -96,15 +99,15 @@ describe('SpanishFlashcards', () => {
     });
 
     // 2. Click the reset button.
-    fireEvent.click(screen.getByText('Reset'));
+    fireEvent.click(screen.getByTitle('Reset Deck'));
 
     // 3. After reset, all cards are in box 1 and are due.
     // The new current card will be one of them. We verify its box number.
     await waitFor(() => {
-        expect(screen.getByTestId('mastery-badge-1')).toBeInTheDocument();
+      expect(screen.getByTestId('mastery-badge-1')).toBeInTheDocument();
     });
 
     // 4. Crucially, verify the streak was also reset to 0.
-    expect(screen.getByText('0 days')).toBeInTheDocument();
+    expect(screen.getByText('0')).toBeInTheDocument();
   });
 });
